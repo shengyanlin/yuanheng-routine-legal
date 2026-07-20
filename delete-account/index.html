@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src https://ixjyefntqdkrxawuznfz.supabase.co; form-action 'self'; frame-ancestors 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+    <meta name="referrer" content="no-referrer">
+    <title>元衡生醫｜刪除雲端帳號</title>
+    <style>
+      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; color: #17352b; background: #faf8f3; }
+      body { max-width: 680px; margin: 40px auto; padding: 0 16px 48px; line-height: 1.65; }
+      main { background: #fff; border: 1px solid #dce6de; border-radius: 20px; padding: clamp(24px, 5vw, 40px); box-shadow: 0 12px 36px rgba(23, 53, 43, .06); }
+      h1 { margin: 0 0 10px; font-size: clamp(1.7rem, 5vw, 2.25rem); line-height: 1.3; } p, small { color: #304b40; } a { color: #176445; overflow-wrap: anywhere; }
+      .brand { margin: 0 0 8px; color: #176445; font-weight: 700; } .warn { padding: 14px 16px; border-radius: 12px; background: #fff6e5; color: #715000; } .warn strong { color: #614000; }
+      label { display: block; margin-top: 18px; color: #17352b; font-weight: 700; } input { box-sizing: border-box; width: 100%; margin-top: 7px; padding: 12px; border: 1px solid #b8c9bc; border-radius: 9px; color: #17352b; font: inherit; }
+      .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; } .check input { width: auto; margin-top: 6px; } button { width: 100%; margin-top: 22px; padding: 13px; border: 0; border-radius: 10px; background: #b64f45; color: #fff; font: inherit; font-weight: 700; cursor: pointer; } button:disabled { cursor: wait; opacity: .65; }
+      #status { min-height: 28px; margin: 18px 0 0; font-weight: 700; } .error { color: #9e3028; } .success { color: #176445; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">元衡生醫｜日常健康研究所</p>
+      <h1>刪除雲端帳號與資料</h1>
+      <p>僅供已建立雲端帳號的使用者使用。若你未登入或未啟用雲端備份，App 不會有你的雲端帳號資料。</p>
+      <p class="warn"><strong>此操作無法復原。</strong><br>驗證身分後，將永久刪除雲端帳號、雲端備份、補充計畫、服用與觀察紀錄及同意紀錄。本機資料不會由此頁清除。</p>
+      <form id="deletion-form">
+        <label>帳號電子郵件<input name="email" type="email" autocomplete="email" required></label>
+        <label>密碼<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+        <label class="check"><input type="checkbox" required><span>我了解這會永久刪除我的雲端帳號與相關雲端資料。</span></label>
+        <button id="submit" type="submit">永久刪除雲端帳號</button>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+      <small>刪除前需要以密碼重新驗證。此頁不會儲存你的密碼。若需要協助，請聯絡 <a href="mailto:akwugly0503@gmail.com">akwugly0503@gmail.com</a>。</small>
+      <p><a href="../">返回隱私權政策</a></p>
+    </main>
+    <script>
+      const SUPABASE_URL = 'https://ixjyefntqdkrxawuznfz.supabase.co';
+      const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Y43kmeGzVep7-JDO42P-aw_3wi-0QA-";
+      const form = document.querySelector('#deletion-form');
+      const password = document.querySelector('#password');
+      const submit = document.querySelector('#submit');
+      const status = document.querySelector('#status');
+
+      function say(message, type = '') {
+        status.textContent = message;
+        status.className = type;
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        submit.disabled = true;
+        say('正在驗證身分並刪除雲端資料…');
+        try {
+          const data = new FormData(form);
+          const login = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+            method: 'POST',
+            cache: 'no-store',
+            headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: String(data.get('email')).trim(), password: String(data.get('password')) }),
+          });
+          const session = await login.json().catch(() => ({}));
+          if (!login.ok || !session.access_token) {
+            throw new Error('電子郵件或密碼不正確，或帳號尚未完成驗證。');
+          }
+
+          const remove = await fetch(SUPABASE_URL + '/functions/v1/delete-account', {
+            method: 'DELETE',
+            cache: 'no-store',
+            headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + session.access_token },
+          });
+          const result = await remove.json().catch(() => ({}));
+          if (!remove.ok || result.deleted !== true) {
+            throw new Error(result.error || '目前無法刪除帳號，請稍後再試。');
+          }
+          form.reset();
+          say('雲端帳號與相關雲端資料已永久刪除。', 'success');
+        } catch (error) {
+          say(error instanceof Error ? error.message : '目前無法完成刪除，請稍後再試。', 'error');
+        } finally {
+          password.value = '';
+          submit.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
